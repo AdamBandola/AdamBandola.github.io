@@ -1,0 +1,9 @@
+---
+title: "What Am I Looking For in a Job?"
+description: |
+  Along with what I can provide for a company. 
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```

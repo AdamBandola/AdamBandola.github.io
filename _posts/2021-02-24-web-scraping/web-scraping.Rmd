@@ -1,0 +1,128 @@
+---
+title: "Web Scraping"
+description: |
+  Creating a function to use regular expressions while retrieving data of interest from HMTL code, in order to build a data frame. Then creating a function that collects and aggregates data across multiple URL's. 
+author:
+  - name: Adam Bandola
+    url: {}
+date: 02-20-2021
+output:
+  distill::distill_article:
+    self_contained: false
+    toc: TRUE
+    toc_float: TRUE
+    code_folding: Show Code
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+## Background Context
+I am tasked with convincing my group that an expert-driven approach is a better way to predict NFL final standings per conference, when compared to a model-based approach. 
+
+The website used for data was [Probability Football](https://probabilityfootball.com/picks.html?1487349677&username=AVERAGES&weeknum=5). If looking at the URL it is important to note that: <br>
+* The Home Team is always on top of the Away Team<br>
+* The winner of the game is always in <b>bold</b><br>
+* The "Pick" column reports the average probability reported by experts before the game
+
+
+## Creating Regular Expression Function  
+In this part, I am scraping data from probabilityfootball.com, which is a website that houses data on football game results, in order to measure the accuracy of experts in their weekly pick of winners. 
+
+```{r Function, echo=TRUE, cache=TRUE, eval=TRUE}
+#function that is going to be applied to weeks 5:21
+scrap_football_data <-function(url) {
+  library("httr")
+  html_code <- GET(url)
+  html_code <- content(html_code, "text", encoding = "ISO-8859-1")
+  html_code <- gsub(x = html_code, pattern = "[[:cntrl:]]", replacement = "")
+  html_code <- gsub(x = html_code, pattern = "[[:blank:]]+", replacement = " ") 
+  
+  #Getting Team Names
+  Team_Names <- gregexpr(pattern = "TARGET=\"_BLANK\">.+?</TD>", text=html_code)
+  matches    <- regmatches(x=html_code, m=Team_Names)
+  Team_Names <- matches[[1]]
+  Team_Names <- substr(x=Team_Names, start=17, nchar(Team_Names)-9) #removing the first html tags and the last to only have which teams won left
+  Team_Names <- unique(head(Team_Names,-2)) # Removing the last two because they're from the tie breakers section 
+  Team_Names <- gsub(x=Team_Names, pattern="<B>|</B>", replacement="")
+  
+  #Getting which teams won next
+  Winning_Team <- gregexpr(pattern = "TARGET=\"_BLANK\"><B>.+?</B></A></TD>", html_code)
+  matches      <- regmatches(x=html_code, m=Winning_Team)
+  Winning_Team <- matches[[1]]
+  Winning_Team <- substr(x=Winning_Team, start=20, nchar(Winning_Team)-13)
+  Winning_Team <- unique(head(Winning_Team, -1)) #Removing the last one because its from the tie breaker section 
+  
+  #Getting the home team by using a sequence
+  Home_Team <- Team_Names[seq(from=1, to=length(Team_Names), by=2)]
+  #Getting the away team by using a sequence
+  Away_Team <- Team_Names[seq(from=2, to=length(Team_Names), by=2)]
+  
+  #Getting percentages
+  Prediction_Teams <- gregexpr(pattern="align=center><NOBR>.+?</NOBR></TD>", text=html_code)
+  matches          <- regmatches(x=html_code, m=Prediction_Teams)
+  Prediction_Teams <- matches[[1]]
+  Prediction_Teams <- substr(x=Prediction_Teams, start=20, nchar(Prediction_Teams)-12)
+  Prediction_Teams <- gsub(x=Prediction_Teams, pattern="<B>|</B>", replacement="")
+  Prediction_Teams <- gsub(x=Prediction_Teams, pattern="%", replacement="")
+  
+  #Getting prediction for home and away using sequence again
+  Prediction_Home_Team <- Prediction_Teams[seq(from=1, to=length(Prediction_Teams), by=2)]
+  Prediction_Away_Team <- Prediction_Teams[seq(from=2, to=length(Prediction_Teams), by=2)]
+  
+  #Creating data frame with vectors
+  result <- data.frame(Home_Team, Away_Team, Winning_Team, Prediction_Home_Team, Prediction_Away_Team)
+  result
+  return(result)
+}
+```
+
+> The above function receives a URL as an arugment and returns a data frame called <b><i>result</i></b> containing data in five columns, namely Home_Team, Away_Team, Winner_Team, Prediction_Home_Team, and Prediction_Away_Team. 
+
+
+## Function to Aggregate Data
+Since the URL stays the same except the weeknum=, I can create a function that will go through the URL pages and aggregate the data for each week into a data frame. I did so with a <b>for</b> function and specified that it select weeks five through twenty one, which is all the regular season weeks. 
+
+```{r ForLoop, echo=TRUE, cache=TRUE, eval=TRUE}
+#creating a for loop to run the function over each week of the url, having it rbind the rows from each result into another data frame
+Football_data <- NULL
+for (week in 5:21){
+  url <- paste0("https://probabilityfootball.com/picks.html?1487349677&username=AVERAGES&weeknum=", week, "")
+  week <- scrap_football_data(url)
+  Football_data <- rbind(Football_data, week)
+}
+
+library(knitr)
+kable(head(Football_data), caption = "First Six Results From Football_Data")
+```
+> The table above is the first six rows for the football_data data frame, the data frame contains 256 rows total. Prediction_Home_Team and Prediction_Away_Team are percentages, summing the numbers for each row will give 100%. 
+
+## Running a T-Test
+
+In order to answer the question of whether or not experts can accurately produce foreasts, something needs to be compared to the expert-driven approach. For this, a unbiased coin that would accurately predict the winner of NFL games fifty percent of the time. 
+
+```{r TTest, echo=TRUE, cache=TRUE, eval=TRUE}
+probability_winner <- ifelse(Football_data$Winning_Team == Football_data$Home_Team, 
+                             as.character(Football_data$Prediction_Home_Team), 
+                             as.character(Football_data$Prediction_Away_Team))
+
+Football_data$probability_winner <- probability_winner
+
+Football_data$probability_winner <- as.integer(Football_data$probability_winner) # was character before, but we need it to be integer in order to do t test
+
+t_test <- t.test(Football_data$probability_winner, mu=50, alternative = "greater")
+
+library(pander)
+pander(t_test)
+```
+> Null Hypothesis: Mu=50 <br>
+Alternative Hypthesis: Mu > 0 <br> 
+where Mu is the mean accuracy of predictions by experts
+
+From the output of the t-test, we can see that, <b>on average</b>, experts will predict the winner of NFL games more often than an unbiased coin (50% of the time) would. 
+
+## Final Conclusion
+
+While the expert-driven approach did, on average, beat the unbiased coin, the reason for conducting this experiment was to prove that an expert-driven approach is better to use than a model-based approach. Based on the findings, I would be skeptical to recommend this approach over others without the ability to directly compare. <br>
+<br>
+For that reason, I would refrain from saying this is the best way to go about predicting NFL standings, but would likely reference the fact that it is fast, simple and easy to replicate. 
