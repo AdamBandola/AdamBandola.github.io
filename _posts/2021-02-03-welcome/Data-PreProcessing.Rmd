@@ -2,7 +2,7 @@
 title: "Data Pre-Processing"
 description: |
   In this post is data pre-processing for a retention predictive modeling project. Includes variable recoding, imputation and dummy variables.  
-date: 02-20-2020
+date: 2020-02-20
 output:
   distill::distill_article:
     self_contained: false

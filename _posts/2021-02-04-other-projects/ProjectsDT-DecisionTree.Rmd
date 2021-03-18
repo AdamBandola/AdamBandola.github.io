@@ -2,7 +2,7 @@
 title: "Decision Tree Modeling"
 description: |
   In this post we are looking to lower the difference in area under the curve (AUC) between the training and validation data. We do so by experimenting with the minimum node size and the number of variables randomly sampled at each split. 
-date: 05-08-2020
+date: 2020-05-08
 output:
   distill::distill_article:
     self_contained: false
