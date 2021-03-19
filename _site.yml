@@ -1,0 +1,15 @@
+name: "Portfolio Website"
+title: "Adam Bandola"
+description: |
+  My Website
+output_dir: "."
+navbar:
+  right:
+    - text: "Welcome"
+      href: trestles.html
+    - text: "Relevant Projects"
+      href: projectListings.html
+  search: false
+output: 
+  distill::distill_article:
+ 
